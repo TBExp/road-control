@@ -32,6 +32,59 @@ function renderAdmin(){const total=state.teams.reduce((s,t)=>s+Number(t.budget||
 <button class="btn small" onclick="deleteEventModal('${e.id}')">Elimina</button></div>`).join('')||'<div class="card muted">Crea il primo evento.</div>'}</div><div class="section-head"><div><div class="eyebrow">Monitoraggio live</div><h2>Team e budget</h2></div></div><div class="table-wrap"><table><thead><tr><th>Team</th><th>Evento</th><th>Budget</th><th>Ultimo accesso</th><th>Azioni</th></tr></thead><tbody>${state.teams.map(t=>`<tr><td><b>${esc(t.name)}</b></td><td>${esc(t.events?.name||'')}</td><td>${money(t.budget)}</td><td>${t.last_login_at?new Date(t.last_login_at).toLocaleString('it-IT'):'—'}</td><td><button class="btn small" onclick="budgetModal('${t.id}')">Modifica</button></td></tr>`).join('')}</tbody></table></div><div class="section-head"><div><div class="eyebrow">Tracciamento</div><h2>Ultimi movimenti</h2></div></div><div class="table-wrap"><table><thead><tr><th>Ora</th><th>Team</th><th>Operazione</th><th>Importo</th><th>Budget dopo</th></tr></thead><tbody>${state.transactions.map(x=>`<tr><td>${new Date(x.created_at).toLocaleString('it-IT')}</td><td>${esc(x.teams?.name||'')}</td><td>${esc(x.description)}</td><td>${money(x.amount)}</td><td>${money(x.balance_after)}</td></tr>`).join('')}</tbody></table></div></div>`}
 window.eventModal=()=>showModal(`<div class="eyebrow">NUOVO EVENTO</div><h2>Crea una Road</h2><form id="eventForm" onsubmit="return false;"><label>Nome evento</label><input name="name" required><label>Codice evento</label><input name="code" maxlength="12" required placeholder="ES. FERRARI26"><div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Annulla</button><button type="button" class="btn primary" onclick="window.createEvent(document.getElementById('eventForm'))">Crea</button></div></form>`);
 window.createEvent=async form=>{const f=new FormData(form),{data,error}=await sb.rpc('admin_create_event',{p_name:f.get('name'),p_code:f.get('code').trim().toUpperCase()});if(error||!data?.ok)return showToast(data?.message||error?.message||'Impossibile creare l’evento',false);closeModal();showToast('Evento creato');await refreshAdmin()};
+window.duplicateEventModal=eventId=>{
+  const ev=state.events.find(x=>x.id===eventId);
+  if(!ev)return;
+
+  showModal(`
+    <div class="eyebrow">DUPLICA EVENTO</div>
+    <h2>Duplica ${esc(ev.name)}</h2>
+
+    <label>Nome nuovo evento</label>
+    <input id="duplicateEventName" value="${esc(ev.name)} - COPIA">
+
+    <label>Nuovo codice evento</label>
+    <input id="duplicateEventCode" maxlength="12" placeholder="ES. ${esc(ev.code)}COPY">
+
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="closeModal()">Annulla</button>
+      <button type="button" class="btn primary" onclick="duplicateEvent('${eventId}')">
+        Duplica
+      </button>
+    </div>
+  `);
+};
+
+window.duplicateEvent=async eventId=>{
+  const name=document.getElementById('duplicateEventName')?.value.trim();
+  const code=document.getElementById('duplicateEventCode')?.value.trim().toUpperCase();
+
+  if(!name){
+    return showToast('Inserisci il nome del nuovo evento',false);
+  }
+
+  if(!code){
+    return showToast('Inserisci il codice del nuovo evento',false);
+  }
+
+  const {data,error}=await sb.rpc('admin_duplicate_event',{
+    p_event_id:eventId,
+    p_new_name:name,
+    p_new_code:code
+  });
+
+  if(error||!data?.ok){
+    return showToast(
+      data?.message||error?.message||'Impossibile duplicare l’evento',
+      false
+    );
+  }
+
+  closeModal();
+  showToast('Evento duplicato');
+  await refreshAdmin();
+};
+
 window.deleteEventModal=eventId=>{
   const ev=state.events.find(x=>x.id===eventId);
   if(!ev)return;
