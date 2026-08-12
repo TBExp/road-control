@@ -31,6 +31,55 @@ function renderAdmin(){const total=state.teams.reduce((s,t)=>s+Number(t.budget||
 <button class="btn small" onclick="deleteEventModal('${e.id}')">Elimina</button></div>`).join('')||'<div class="card muted">Crea il primo evento.</div>'}</div><div class="section-head"><div><div class="eyebrow">Monitoraggio live</div><h2>Team e budget</h2></div></div><div class="table-wrap"><table><thead><tr><th>Team</th><th>Evento</th><th>Budget</th><th>Ultimo accesso</th><th>Azioni</th></tr></thead><tbody>${state.teams.map(t=>`<tr><td><b>${esc(t.name)}</b></td><td>${esc(t.events?.name||'')}</td><td>${money(t.budget)}</td><td>${t.last_login_at?new Date(t.last_login_at).toLocaleString('it-IT'):'—'}</td><td><button class="btn small" onclick="budgetModal('${t.id}')">Modifica</button></td></tr>`).join('')}</tbody></table></div><div class="section-head"><div><div class="eyebrow">Tracciamento</div><h2>Ultimi movimenti</h2></div></div><div class="table-wrap"><table><thead><tr><th>Ora</th><th>Team</th><th>Operazione</th><th>Importo</th><th>Budget dopo</th></tr></thead><tbody>${state.transactions.map(x=>`<tr><td>${new Date(x.created_at).toLocaleString('it-IT')}</td><td>${esc(x.teams?.name||'')}</td><td>${esc(x.description)}</td><td>${money(x.amount)}</td><td>${money(x.balance_after)}</td></tr>`).join('')}</tbody></table></div></div>`}
 window.eventModal=()=>showModal(`<div class="eyebrow">NUOVO EVENTO</div><h2>Crea una Road</h2><form id="eventForm" onsubmit="return false;"><label>Nome evento</label><input name="name" required><label>Codice evento</label><input name="code" maxlength="12" required placeholder="ES. FERRARI26"><div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Annulla</button><button type="button" class="btn primary" onclick="window.createEvent(document.getElementById('eventForm'))">Crea</button></div></form>`);
 window.createEvent=async form=>{const f=new FormData(form),{data,error}=await sb.rpc('admin_create_event',{p_name:f.get('name'),p_code:f.get('code').trim().toUpperCase()});if(error||!data?.ok)return showToast(data?.message||error?.message||'Impossibile creare l’evento',false);closeModal();showToast('Evento creato');await refreshAdmin()};
+window.deleteEventModal=eventId=>{
+  const ev=state.events.find(x=>x.id===eventId);
+  if(!ev)return;
+
+  showModal(`
+    <div class="eyebrow">ELIMINA EVENTO</div>
+    <h2>Eliminare ${esc(ev.name)}?</h2>
+    <p class="muted">
+      Verranno eliminati definitivamente l'evento e tutti i dati collegati:
+      team, missioni, sessioni, acquisti e movimenti.
+    </p>
+
+    <label>Digita il codice <b>${esc(ev.code)}</b> per confermare</label>
+    <input id="deleteEventCode" autocomplete="off">
+
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="closeModal()">Annulla</button>
+      <button type="button" class="btn primary" onclick="deleteEvent('${eventId}')">
+        Elimina definitivamente
+      </button>
+    </div>
+  `);
+};
+
+window.deleteEvent=async eventId=>{
+  const ev=state.events.find(x=>x.id===eventId);
+  if(!ev)return;
+
+  const typed=document.getElementById('deleteEventCode')?.value.trim().toUpperCase();
+
+  if(typed!==String(ev.code).trim().toUpperCase()){
+    return showToast('Codice evento non corretto',false);
+  }
+
+  const {data,error}=await sb.rpc('admin_delete_event',{
+    p_event_id:eventId
+  });
+
+  if(error||!data?.ok){
+    return showToast(
+      data?.message||error?.message||'Impossibile eliminare l’evento',
+      false
+    );
+  }
+
+  closeModal();
+  showToast('Evento eliminato');
+  await refreshAdmin();
+};
 window.teamModal=eventId=>showModal(`<div class="eyebrow">NUOVO TEAM</div><h2>Registra una squadra</h2><form onsubmit="createTeam(event,'${eventId}')"><label>Nome team</label><input name="name" required><label>PIN numerico</label><input name="pin" inputmode="numeric" required><label>Budget iniziale</label><input name="budget" type="number" min="0" required value="1000"><div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Annulla</button><button class="btn primary">Crea</button></div></form>`);
 window.createTeam=async(e,eventId)=>{e.preventDefault();const f=new FormData(e.target),{data,error}=await sb.rpc('admin_create_team',{p_event_id:eventId,p_name:f.get('name'),p_pin:f.get('pin'),p_budget:Number(f.get('budget'))});if(error||!data?.ok)return showToast(data?.message||error?.message,false);closeModal();showToast('Team creato');await refreshAdmin()};
 window.challengeModal=eventId=>showModal(`<div class="eyebrow">NUOVA MISSIONE</div><h2>Configura la prova</h2><form onsubmit="createChallenge(event,'${eventId}')"><label>Titolo</label><input name="title" required><label>Descrizione breve</label><textarea name="description"></textarea><div class="grid cols-2"><div><label>Testo indizio</label><textarea name="hint" required></textarea><label>Costo indizio</label><input name="hintCost" type="number" min="0" required></div><div><label>Testo soluzione</label><textarea name="solution" required></textarea><label>Costo soluzione</label><input name="solutionCost" type="number" min="0" required></div></div><div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Annulla</button><button class="btn primary">Salva</button></div></form>`);
